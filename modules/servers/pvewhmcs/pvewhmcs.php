@@ -123,6 +123,12 @@ function pvewhmcs_CreateAccount($params) {
 
 	// Retrieve Plan from table
 	$plan = Capsule::table('mod_pvewhmcs_plans')->where('id', '=', $params['configoption1'])->get()[0];
+	$kvmTemplate = pvewhmcs_get_effective_customfield($params, 'KVMTemplate');
+	$tplNodeQemu = pvewhmcs_get_effective_customfield($params, 'TPL_Node_QEMU');
+	$tplNodeLxc = pvewhmcs_get_effective_customfield($params, 'TPL_Node_LXC');
+	$lxcTemplate = pvewhmcs_get_effective_customfield($params, 'Template');
+	$cloudPassword = pvewhmcs_get_effective_customfield($params, 'Password');
+	$isoImage = pvewhmcs_get_effective_customfield($params, 'ISO');
 
 	// PVE Host - Connection Info
 	$serverip = $params["serverip"];
@@ -164,17 +170,17 @@ function pvewhmcs_CreateAccount($params) {
 	////////////////////
 	// CREATE IF QEMU //
 	////////////////////
-	if (!empty($params['customfields']['KVMTemplate'])) {
+	if (!empty($kvmTemplate)) {
 		// QEMU TEMPLATE - CREATION LOGIC
 		$proxmox = new PVE2_API($serverip, $serverusername, "pam", $serverpassword, $serverport);
 		if ($proxmox->login()) {
 			// Get template node: prefer TPL_Node_QEMU custom field, fallback to first node
 			$nodes = $proxmox->get_node_list();
-			if (!empty($params['customfields']['TPL_Node_QEMU'])) {
-				$template_node = $params['customfields']['TPL_Node_QEMU'];
+			if (!empty($tplNodeQemu)) {
+				$template_node = $tplNodeQemu;
 			} else {
 				// AUTO-DISCOVERY: Find where the template lives
-				$template_node = pvewhmcs_find_node_by_vmid($proxmox, $params['customfields']['KVMTemplate']);
+				$template_node = pvewhmcs_find_node_by_vmid($proxmox, $kvmTemplate);
 			}
 
 			// DEBUG: Log Node Selection logic
@@ -183,7 +189,8 @@ function pvewhmcs_CreateAccount($params) {
 					'pvewhmcs',
 					'Node Selection Debug',
 					array(
-						'TPL_Node_QEMU_Input' => $params['customfields']['TPL_Node_QEMU'],
+						'KVMTemplate_Effective' => $kvmTemplate,
+						'TPL_Node_QEMU_Effective' => $tplNodeQemu,
 						'ALL_Custom_Fields' => $params['customfields'],
 						'ALL_Config_Options' => $params['configoptions'],
 						'Available_Nodes' => $nodes,
@@ -201,8 +208,8 @@ function pvewhmcs_CreateAccount($params) {
 			$vm_settings['full'] = true;
 			$vm_settings['target'] = $template_node;
 			// QEMU TEMPLATE - Conduct the VM CLONE from Template to Machine
-			$logrequest = '/nodes/' . $template_node . '/qemu/' . $params['customfields']['KVMTemplate'] . '/clone' . $vm_settings;
-			$response = $proxmox->post('/nodes/' . $template_node . '/qemu/' . $params['customfields']['KVMTemplate'] . '/clone', $vm_settings);
+			$logrequest = '/nodes/' . $template_node . '/qemu/' . $kvmTemplate . '/clone' . json_encode($vm_settings);
+			$response = $proxmox->post('/nodes/' . $template_node . '/qemu/' . $kvmTemplate . '/clone', $vm_settings);
 
 			// DEBUG - Log the request parameters before it's fired
 			if (Capsule::table('mod_pvewhmcs')->where('id', '1')->value('debug_mode') == 1) {
@@ -308,8 +315,8 @@ function pvewhmcs_CreateAccount($params) {
 					$cloned_tweaks['cipassword'] = $params['password'];
 				}
 
-				if (!empty($params['customfields']['Password'])) {
-					$cloned_tweaks['cipassword'] = $params['customfields']['Password'];
+				if (!empty($cloudPassword)) {
+					$cloned_tweaks['cipassword'] = $cloudPassword;
 				}
 
 				$cloned_config = $proxmox->get('/nodes/' . $template_node . '/qemu/' . $vm_settings['newid'] . '/config');
@@ -348,7 +355,7 @@ function pvewhmcs_CreateAccount($params) {
 			///////////////////////////
 			// LXC: Preparation Work //
 			///////////////////////////
-			$vm_settings['ostemplate'] = $params['customfields']['Template'];
+			$vm_settings['ostemplate'] = $lxcTemplate;
 			$vm_settings['swap'] = $plan->swap;
 			$vm_settings['rootfs'] = $plan->storage . ':' . $plan->disk;
 			$vm_settings['bwlimit'] = $plan->diskio;
@@ -383,7 +390,7 @@ function pvewhmcs_CreateAccount($params) {
 			}
 			$vm_settings['onboot'] = $plan->onboot;
 			$vm_settings['unprivileged'] = $plan->unpriv;
-			$vm_settings['password'] = $params['customfields']['Password'];
+			$vm_settings['password'] = $cloudPassword;
 		} else {
 			////////////////////////////
 			// QEMU: Preparation Work //
@@ -416,6 +423,7 @@ function pvewhmcs_CreateAccount($params) {
 			}
 			$vm_settings['kvm'] = $plan->kvm;
 			$vm_settings['onboot'] = $plan->onboot;
+			$vm_settings['name'] = pvewhmcs_get_service_hostname($params, $vmid);
 
 			$vm_settings[$plan->disktype . '0'] = $plan->storage . ':' . $plan->disk . ',format=' . $plan->diskformat;
 			if (!empty($plan->diskcache)) {
@@ -424,8 +432,10 @@ function pvewhmcs_CreateAccount($params) {
 			$vm_settings['bwlimit'] = $plan->diskio;
 
 			// ISO: Attach file to the guest
-			if (isset($params['customfields']['ISO'])) {
-				$vm_settings['ide2'] = 'local:iso/' . $params['customfields']['ISO'] . ',media=cdrom';
+			if (!empty($isoImage)) {
+				$vm_settings['ide2'] = 'local:iso/' . $isoImage . ',media=cdrom';
+			} else {
+				$vm_settings['ide2'] = $plan->storage . ':cloudinit';
 			}
 
 			// NET: Config specifics for guest networking
@@ -481,6 +491,9 @@ function pvewhmcs_CreateAccount($params) {
 				// Find the next available VMID by checking if the VMID exists either for QEMU or LXC
 				$vmid = pvewhmcs_find_next_available_vmid($proxmox, $template_node, $vmid);
 				$vm_settings['vmid'] = $vmid;
+				if ($plan->vmtype == 'kvm') {
+					$vm_settings['name'] = pvewhmcs_get_service_hostname($params, $vmid);
+				}
 
 				if ($plan->vmtype == 'kvm') {
 					$guest_type = 'qemu';
@@ -1665,6 +1678,60 @@ function pvewhmcs_get_service_hostname(array $params, $fallbackVmid)
 	}
 
 	return 'vps-' . (int) $fallbackVmid;
+}
+
+function pvewhmcs_get_effective_customfield(array $params, $fieldName)
+{
+	if (isset($params['customfields'][$fieldName]) && trim((string) $params['customfields'][$fieldName]) !== '') {
+		return trim((string) $params['customfields'][$fieldName]);
+	}
+
+	$productId = 0;
+	if (!empty($params['pid'])) {
+		$productId = (int) $params['pid'];
+	} elseif (!empty($params['packageid'])) {
+		$productId = (int) $params['packageid'];
+	}
+
+	if ($productId <= 0) {
+		return '';
+	}
+
+	try {
+		$field = Capsule::table('tblcustomfields')
+			->where('type', '=', 'product')
+			->where('relid', '=', $productId)
+			->where('fieldname', '=', $fieldName)
+			->first();
+	} catch (Throwable $e) {
+		return '';
+	}
+
+	if (!$field) {
+		return '';
+	}
+
+	if (!empty($params['serviceid'])) {
+		try {
+			$value = Capsule::table('tblcustomfieldsvalues')
+				->where('fieldid', '=', $field->id)
+				->where('relid', '=', (int) $params['serviceid'])
+				->value('value');
+
+			if (trim((string) $value) !== '') {
+				return trim((string) $value);
+			}
+		} catch (Throwable $e) {
+			// Fall through to product-level select options.
+		}
+	}
+
+	$options = array_filter(array_map('trim', explode(',', (string) $field->fieldoptions)));
+	if (!empty($options)) {
+		return (string) reset($options);
+	}
+
+	return '';
 }
 
 function pvewhmcs_sanitise_proxmox_name($name)
