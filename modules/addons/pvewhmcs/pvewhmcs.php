@@ -1,11 +1,12 @@
 <?php
 
 /*  
-	Proxmox VE for WHMCS - Addon/Server Modules for WHMCS (& PVE)
-	https://github.com/The-Network-Crew/Proxmox-VE-for-WHMCS/
+	Bisup Proxmox VE for WHMCS - Addon/Server Modules for WHMCS (& PVE)
+	Bisup white-label fork of The-Network-Crew/Proxmox-VE-for-WHMCS
 	File: /modules/addons/pvewhmcs/pvewhmcs.php (GUI Work)
 
 	Copyright (C) The Network Crew Pty Ltd (TNC) & Co.
+	White-label modifications Copyright (C) Bisup.
 	For other Contributors to PVEWHMCS, see CONTRIBUTORS.md
 
 	This program is free software: you can redistribute it and/or modify
@@ -34,10 +35,10 @@ require_once('proxmox.php');
 // CONFIG: Declare key options to the WHMCS Addon Module framework.
 function pvewhmcs_config() {
 	$configarray = array(
-		"name" => "Proxmox VE for WHMCS",
-		"description" => "Proxmox VE (Virtual Environment) & WHMCS, integrated & open-source! Provisioning & Management of VMs/CTs.".is_pvewhmcs_outdated(),
+		"name" => "Bisup Proxmox VE for WHMCS",
+		"description" => "Bisup-branded Proxmox VE provisioning and management for WHMCS VMs/CTs.".is_pvewhmcs_outdated(),
 		"version" => pvewhmcs_version(),
-		"author" => "The Network Crew Pty Ltd",
+		"author" => "Bisup",
 		'language' => 'English'
 	);
 	return $configarray;
@@ -45,7 +46,7 @@ function pvewhmcs_config() {
 
 // VERSION: also stored in repo/version (for update-available checker)
 function pvewhmcs_version(){
-	return "1.3.5";
+	return "1.3.6";
 }
 
 // WHMCS MODULE: ACTIVATION of the ADDON MODULE
@@ -73,15 +74,15 @@ function pvewhmcs_activate() {
 
 	// Return success or error.
 	if (!$err)
-		return array('status'=>'success','description'=>'Proxmox VE for WHMCS was installed successfully!');
+		return array('status'=>'success','description'=>'Bisup Proxmox VE for WHMCS was installed successfully!');
 
-	return array('status'=>'error','description'=>'Proxmox VE for WHMCS was not activated properly.');
+	return array('status'=>'error','description'=>'Bisup Proxmox VE for WHMCS was not activated properly.');
 }
 
 // WHMCS MODULE: DEACTIVATION
 function pvewhmcs_deactivate() {
 	// Return the assumed result (change?)
-	return array('status'=>'success','description'=>'Proxmox VE for WHMCS successfully deactivated. Database tables/data retained.');
+	return array('status'=>'success','description'=>'Bisup Proxmox VE for WHMCS successfully deactivated. Database tables/data retained.');
 }
 
 // WHMCS MODULE: Upgrade
@@ -152,24 +153,25 @@ function pvewhmcs_upgrade($vars) {
 			}
 	    }
 	}
-}
 
-// UPDATE CHECKER: live vs repo
-function is_pvewhmcs_outdated(){
-	if(get_pvewhmcs_latest_version() > pvewhmcs_version()){
-		return "<br><span style='float:right;'><b>Proxmox VE for WHMCS is outdated: <a style='color:red' href='https://github.com/The-Network-Crew/Proxmox-VE-for-WHMCS/releases/latest'>Download the new version!</a></span>";
+	if (version_compare($currentlyInstalledVersion, '1.3.6', 'lt')) {
+		$schema = Capsule::schema();
+		if (!$schema->hasColumn('mod_pvewhmcs_vms', 'node_name')) {
+			$schema->table('mod_pvewhmcs_vms', function ($table) {
+				$table->string('node_name', 255)->nullable()->after('node_id');
+			});
+		}
 	}
 }
 
-// UPDATE CHECKER: return latest ver
-function get_pvewhmcs_latest_version(){
-	$ch = curl_init();
-	curl_setopt($ch, CURLOPT_URL, "https://raw.githubusercontent.com/The-Network-Crew/Proxmox-VE-for-WHMCS/master/version");
-	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-	$result = curl_exec($ch);
-	curl_close ($ch);
+// UPDATE CHECKER: disabled for the Bisup white-label fork.
+function is_pvewhmcs_outdated(){
+	return '';
+}
 
-	return str_replace("\n", "", $result);
+// UPDATE CHECKER: return installed version for white-label builds.
+function get_pvewhmcs_latest_version(){
+	return pvewhmcs_version();
 }
 
 /**
@@ -220,8 +222,8 @@ function pvewhmcs_output($vars) {
 
 	// Check for update and report if available
 	if (!empty(is_pvewhmcs_outdated())) {
-		$_SESSION['pvewhmcs']['infomsg']['title']='Proxmox VE for WHMCS: New version available!' ;
-		$_SESSION['pvewhmcs']['infomsg']['message']='<a href="https://github.com/The-Network-Crew/Proxmox-VE-for-WHMCS/releases/latest" target="_blank">https://github.com/The-Network-Crew/Proxmox-VE-for-WHMCS/releases/latest</a>' ;
+		$_SESSION['pvewhmcs']['infomsg']['title']='Bisup Proxmox VE for WHMCS: New version available!' ;
+		$_SESSION['pvewhmcs']['infomsg']['message']='Contact Bisup for the approved module package.' ;
 	}
 		
 	// Print Messages to GUI before anything else
@@ -347,7 +349,7 @@ function pvewhmcs_output($vars) {
 			// Login + get cluster/resources
 			$proxmox = new PVE2_API($serverip, $serverusername, "pam", $serverpassword['password']);
 			if (!$proxmox->login()) {
-				echo '<div class="alert alert-danger">Unable to log in to PVE API on ' . htmlspecialchars($serverip) . '. Check credentials, connectivity & configurations.</div><center><img src="../modules/addons/pvewhmcs/img/forbidden.png"><br><a href="https://github.com/The-Network-Crew/Proxmox-VE-for-WHMCS" target="_blank"><img src="../modules/addons/pvewhmcs/img/logo-stacked.png" style="max-height:150px;"></a></center>';
+				echo '<div class="alert alert-danger">Unable to log in to PVE API on ' . htmlspecialchars($serverip) . '. Check credentials, connectivity & configurations.</div><center><img src="../modules/addons/pvewhmcs/img/forbidden.png"><br><img src="../modules/addons/pvewhmcs/img/logo-stacked.png" style="max-height:150px;" alt="Bisup Proxmox VE for WHMCS"></center>';
 				continue;
 			}
 
@@ -501,7 +503,7 @@ function pvewhmcs_output($vars) {
 
 			$proxmox = new PVE2_API($serverip, $serverusername, "pam", $serverpassword['password']);
 			if (!$proxmox->login()) {
-				echo '<div class="alert alert-danger">Unable to log in to PVE API on ' . htmlspecialchars($serverip) . '. Check credentials, connectivity & configurations.</div><center><img src="../modules/addons/pvewhmcs/img/forbidden.png"><br><a href="https://github.com/The-Network-Crew/Proxmox-VE-for-WHMCS" target="_blank"><img src="../modules/addons/pvewhmcs/img/logo-stacked.png" style="max-height:150px;"></a></center>';
+				echo '<div class="alert alert-danger">Unable to log in to PVE API on ' . htmlspecialchars($serverip) . '. Check credentials, connectivity & configurations.</div><center><img src="../modules/addons/pvewhmcs/img/forbidden.png"><br><img src="../modules/addons/pvewhmcs/img/logo-stacked.png" style="max-height:150px;" alt="Bisup Proxmox VE for WHMCS"></center>';
 				continue;
 			}
 
@@ -752,34 +754,21 @@ function pvewhmcs_output($vars) {
 		</div>
 		
 		<div style="background:#faf8fc;border:1px solid #e0d4e8;border-radius:8px;padding:25px;margin-bottom:20px;">
-			<h3 style="margin:0 0 15px 0;color:#5c3d7a;font-weight:600;"><span style="font-size:24px;">&#9829;</span> Open Source</h3>
-			<p style="margin:0 0 12px 0;font-size:14px;line-height:1.6;color:#333;">PVEWHMCS is open-source and free to use &amp; improve on!</p>
-			<p style="margin:0;">
-				<a href="https://github.com/The-Network-Crew/Proxmox-VE-for-WHMCS/" target="_blank" style="color:#5c3d7a;">&#10132; GitHub Repository</a>
-			</p>
+			<h3 style="margin:0 0 15px 0;color:#5c3d7a;font-weight:600;"><span style="font-size:24px;">&#9829;</span> Bisup White-label Build</h3>
+			<p style="margin:0 0 12px 0;font-size:14px;line-height:1.6;color:#333;">This WHMCS module is maintained as a Bisup-branded fork for internal hosting operations.</p>
 		</div>
 		
 		<div style="background:#f8fff8;border:1px solid #c3e6c3;border-radius:8px;padding:25px;margin-bottom:20px;">
-			<h3 style="margin:0 0 15px 0;color:#2d7a2d;font-weight:600;"><span style="font-size:24px;">&#9733;</span> Leave a Review</h3>
-			<p style="margin:0 0 12px 0;font-size:14px;line-height:1.6;color:#333;">Your 5-star review on WHMCS Marketplace helps the module grow!</p>
-			<p style="margin:0;">
-				<a href="https://marketplace.whmcs.com/product/6935-proxmox-ve-for-whmcs" target="_blank" style="color:#2d7a2d;">&#9733;&#9733;&#9733;&#9733;&#9733; Rate on WHMCS Marketplace</a>
-			</p>
+			<h3 style="margin:0 0 15px 0;color:#2d7a2d;font-weight:600;"><span style="font-size:24px;">&#9733;</span> Operations Notes</h3>
+			<p style="margin:0 0 12px 0;font-size:14px;line-height:1.6;color:#333;">Keep Proxmox credentials, VNC secret, VM plans, and IP pools reviewed before provisioning production services.</p>
 		</div>
 		
 		<div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:25px;">
 			<h3 style="margin:0 0 15px 0;color:#5c3d7a;font-weight:600;"><span style="font-size:24px;">&#9881;</span> Technical Support</h3>
-			<p style="margin:0 0 12px 0;font-size:14px;line-height:1.6;">Our README contains a wealth of information. Please review it before raising issues.</p>
-			<p style="margin:0 0 15px 0;">
-				<a href="https://github.com/The-Network-Crew/Proxmox-VE-for-WHMCS/" target="_blank" style="color:#5c3d7a;">&#10132; View Documentation</a>
-			</p>
-			<p style="margin:0 0 12px 0;font-size:14px;line-height:1.6;">Only raise a GitHub Issue &mdash; including logs &mdash; if you have properly tried to resolve it first.</p>
-			<p style="margin:0 0 15px 0;">
-				<a href="https://github.com/The-Network-Crew/Proxmox-VE-for-WHMCS/issues/new/choose" target="_blank" style="color:#5c3d7a;">&#10132; Open an Issue</a>
-			</p>
-			<p style="margin:0;padding:12px;background:#fff8f0;border-radius:6px;font-size:13px;color:#856404;border:1px solid #ffc107;">&#9888; Help is not guaranteed (FOSS). We will need your assistance to troubleshoot.</p>
+			<p style="margin:0 0 12px 0;font-size:14px;line-height:1.6;">Use the repository README and docs/BISUP-WHITELABEL.md for installation, branding, and operational notes.</p>
+			<p style="margin:0;padding:12px;background:#fff8f0;border-radius:6px;font-size:13px;color:#856404;border:1px solid #ffc107;">&#9888; Capture WHMCS Module Log output and Proxmox task IDs before escalating module issues.</p>
 		</div>
-		<a href="https://github.com/The-Network-Crew/Proxmox-VE-for-WHMCS" target="_blank"><img src="../modules/addons/pvewhmcs/img/logo-stacked.png" style="max-height:150px;"></a>
+		<img src="../modules/addons/pvewhmcs/img/logo-stacked.png" style="max-height:150px;" alt="Bisup Proxmox VE for WHMCS">
 	</div>';
 	echo '</div>';
 
@@ -798,7 +787,7 @@ function pvewhmcs_output($vars) {
 		</td>
 		<td style="padding:15px 0;border-bottom:1px solid #eee;">
 			<input type="text" style="width:100%;max-width:300px;padding:8px 12px;border:1px solid #ddd;border-radius:4px;font-size:14px;" name="vnc_secret" id="vnc_secret" value="' . $config->vnc_secret . '">
-			<p style="margin:8px 0 0 0;font-size:13px;color:#666;">Password for <code style="background:#f4f0f7;padding:2px 6px;border-radius:3px;color:#5c3d7a;">vnc@pve</code> user. Required for VNC proxying. <a href="https://github.com/The-Network-Crew/Proxmox-VE-for-WHMCS/" target="_blank" style="color:#5c3d7a;"><u>View README</u></a></p>
+			<p style="margin:8px 0 0 0;font-size:13px;color:#666;">Password for <code style="background:#f4f0f7;padding:2px 6px;border-radius:3px;color:#5c3d7a;">vnc@pve</code> user. Required for VNC proxying. See the repository README for setup details.</p>
 		</td>
 	</tr>
 	<tr>
@@ -829,7 +818,7 @@ function pvewhmcs_output($vars) {
 	</div>
 	</form>
 	</div>
-	<a href="https://github.com/The-Network-Crew/Proxmox-VE-for-WHMCS" target="_blank"><img src="../modules/addons/pvewhmcs/img/logo-stacked.png" style="max-height:150px;"></a>
+	<img src="../modules/addons/pvewhmcs/img/logo-stacked.png" style="max-height:150px;" alt="Bisup Proxmox VE for WHMCS">
 	</div>
 	';
 	echo '</div>';

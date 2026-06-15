@@ -1,11 +1,12 @@
 <?php
 
 /*  
-    Proxmox VE for WHMCS - Addon/Server Modules for WHMCS (& PVE)
-    https://github.com/The-Network-Crew/Proxmox-VE-for-WHMCS/
+    Bisup Proxmox VE for WHMCS - Addon/Server Modules for WHMCS (& PVE)
+    Bisup white-label fork of The-Network-Crew/Proxmox-VE-for-WHMCS
     File: /modules/addons/pvewhmcs/hooks.php (WHMCS Hooks)
 
     Copyright (C) The Network Crew Pty Ltd (TNC) & Co.
+    White-label modifications Copyright (C) Bisup.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by

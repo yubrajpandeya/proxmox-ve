@@ -1,11 +1,12 @@
 <?php
 
 /*  
-    Proxmox VE for WHMCS - Addon/Server Modules for WHMCS (& PVE)
-    https://github.com/The-Network-Crew/Proxmox-VE-for-WHMCS/
+    Bisup Proxmox VE for WHMCS - Addon/Server Modules for WHMCS (& PVE)
+    Bisup white-label fork of The-Network-Crew/Proxmox-VE-for-WHMCS
     File: /modules/servers/pvewhmcs/novnc_router.php (VNC)
 
     Copyright (C) The Network Crew Pty Ltd (TNC) & Co.
+    White-label modifications Copyright (C) Bisup.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -22,21 +23,12 @@
 */
 
 // ---------------------------------------
-// Clear any existing PVEAuthCookie first
-// ---------------------------------------
-setcookie('PVEAuthCookie', '', [
-    'expires'  => time() - 3600,
-    'path'     => '/',
-    'domain'   => '',
-    'secure'   => true,
-    'httponly' => false,
-    'samesite' => 'None',
-]);
-
-// ---------------------------------------
 // Check required GET parameters
 // ---------------------------------------
-if (!isset($_GET['pveticket'], $_GET['host'], $_GET['path'], $_GET['vncticket'])) {
+require_once dirname(__DIR__, 3) . '/init.php';
+require_once __DIR__ . '/console_debug.php';
+
+if (!isset($_GET['token'])) {
     echo 'Error: Missing required info to route your request. Please try again.';
     exit;
 }
@@ -44,39 +36,53 @@ if (!isset($_GET['pveticket'], $_GET['host'], $_GET['path'], $_GET['vncticket'])
 // ---------------------------------------
 // Assign GET parameters
 // ---------------------------------------
-$pveticket  = $_GET['pveticket'];
-$vncticket  = $_GET['vncticket'];
-$host       = $_GET['host'];
-$path       = $_GET['path'];
-$port       = $_GET['port'];
+$token      = $_GET['token'];
+pvewhmcs_console_debug($token, 'router-opened', array(
+    'remoteAddr' => isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : null,
+    'hostHeader' => isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : null,
+));
 
-// ---------------------------------------
-// Determine main domain for cookie
-// ---------------------------------------
-$hostParts  = explode('.', $_SERVER['HTTP_HOST']);
-$mainDomain = implode('.', array_slice($hostParts, -2)); // example.com
-
-// ---------------------------------------
-// Set the PVEAuthCookie for Proxmox
-// ---------------------------------------
-setrawcookie('PVEAuthCookie', $pveticket, [
-    'expires'  => 0,
-    'path'     => '/',
-    'domain'   => '.' . $mainDomain,
-    'secure'   => true,
-    'httponly' => false,
-    'samesite' => 'None',
-]);
+if (
+    empty($_SESSION['pvewhmcs_novnc'][$token])
+    || empty($_SESSION['pvewhmcs_novnc'][$token]['expires'])
+    || $_SESSION['pvewhmcs_novnc'][$token]['expires'] < time()
+) {
+    echo 'Error: Console session expired. Please launch noVNC again.';
+    exit;
+}
 
 // ---------------------------------------
 // Build final noVNC URL
 // ---------------------------------------
-$hostname      = gethostbyaddr($host);
-$redirect_url  = './novnc/vnc.html?autoconnect=true&encrypt=true'
-               . '&host=' . $hostname
-               . '&port=' . $port
-               . '&password=' . urlencode($vncticket)
-               . '&path=' . urlencode($path);
+$session       = $_SESSION['pvewhmcs_novnc'][$token];
+$proxy_path    = isset($session['reverseProxyPath']) ? trim($session['reverseProxyPath']) : '';
+
+if ($proxy_path !== '') {
+    $proxy_path = trim($proxy_path, '/');
+    $target_path = ltrim($session['path'], '/');
+    $ws_path = $proxy_path . '/' . $target_path;
+    setcookie('PVEAuthCookie', '', time() - 3600, '/' . $proxy_path . '/', '', true, true);
+    setcookie('PVEAuthCookie', '', time() - 3600, '/' . $proxy_path . '-ws/', '', true, true);
+    setcookie('PVEAuthCookie', $session['pveticket'], time() + 120, '/', '', true, true);
+    setcookie('PVEAuthCookie', $session['pveticket'], time() + 120, '/' . $proxy_path . '/', '', true, true);
+    setcookie('PVEAuthCookie', $session['pveticket'], time() + 120, '/' . $proxy_path . '-ws/', '', true, true);
+    $transport = 'reverse-proxy';
+    $cookieMode = 'encoded-root-http-ws';
+} else {
+    $ws_path = 'modules/servers/pvewhmcs/novnc_ws.php?token=' . urlencode($token);
+    $transport = 'php-fallback';
+    $cookieMode = 'php-fallback';
+}
+
+$redirect_url  = './novnc/vnc_lite.html?autoconnect=true&encrypt=true'
+               . '&debugtoken=' . urlencode($token);
+pvewhmcs_console_debug($token, 'router-redirect', array(
+    'wsPath' => $ws_path,
+    'transport' => $transport,
+    'cookieMode' => $cookieMode,
+    'targetHost' => isset($session['host']) ? $session['host'] : null,
+    'targetPort' => isset($session['port']) ? $session['port'] : null,
+));
 
 // ---------------------------------------
 // Redirect to noVNC

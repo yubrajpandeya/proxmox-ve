@@ -1,1 +1,7 @@
 .DS_Store
+console-debug.log
+modules/servers/pvewhmcs/console-debug.log
+modules/servers/pvewhmcs/novnc_sessions/
+modules/servers/pvewhmcs/node_modules/
+modules/servers/pvewhmcs/package-lock.json
+modules/servers/pvewhmcs/package.json

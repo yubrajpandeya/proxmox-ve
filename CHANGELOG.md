@@ -1,5 +1,11 @@
 # Changelog
-All notable changes to Proxmox VE for WHMCS will be documented in this file.
+All notable changes to Bisup Proxmox VE for WHMCS will be documented in this file.
+
+## Bisup white-label fork
+
+- Rebranded WHMCS-facing module metadata, admin copy, documentation, and logo assets for Bisup.
+- Disabled the upstream GitHub update checker for white-label releases.
+- Added Bisup installation, troubleshooting, security, and white-label maintenance documentation.
 
 ## [1.3.5] - 2026-05-13 - _"Ports and Consoles"_
 

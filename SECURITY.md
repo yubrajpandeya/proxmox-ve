@@ -1,57 +1,50 @@
 # Security Policy
 
-## 🏥 Supported Versions
+## Supported Versions
 
-The single latest available release is the only release supported by this Security Policy.
+Only the latest Bisup-approved build of this fork is supported.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.x.x latest  | :white_check_mark: |
-| 1.2.x   | :x:                |
-| 1.1.x   | :x:                |
-| 1.0.x   | :x:                |
+| Version | Supported |
+| ------- | --------- |
+| Latest Bisup build | Yes |
+| Older Bisup builds | No |
+| Upstream-only builds | No |
 
-> \* Note: Latest version - if it is v1.2.3 then that is supported, if latest is v1.4.1 then that is supported, etc. 
+## Secure Code Contributions
 
-## 🔒 Secure Code Contributions
+Security-sensitive changes should follow:
 
-Please refrain from depending on any external source - for instance, noVNC-latest is bundled into the Module.
+- Principle of least privilege.
+- Input validation and sanitization.
+- HTTPS-only administrative and console flows.
+- Compatibility with supported WHMCS and Proxmox versions.
+- Robust error handling and logging.
+- Secure defaults for credentials, tokens, and console routing.
 
-Best practices should be followed during Software Engineering which is especially hard when only patching.
-
-### For instance, work to implement:
-
-- Principle of Least Privilege
-- Input Validation & Sanitisation
-- Secure Communication (HTTPS etc)
-- Compatibility with core/updates
-- Thorough inline comments/specs
-- Robust error handling/logging
-- Secure configs by default
-
-### References:
+Useful references:
 
 - https://owasp.org/
-- [CERT Secure Coding](https://wiki.sei.cmu.edu/confluence/display/seccode/SEI+CERT+Coding+Standards)
-- [NIST Secure SW Dev](https://csrc.nist.gov/Projects/ssdf)
-- [MIT Open Security](https://ocw.mit.edu/courses/6-858-computer-systems-security-fall-2014/)
+- https://wiki.sei.cmu.edu/confluence/display/seccode/SEI+CERT+Coding+Standards
+- https://csrc.nist.gov/Projects/ssdf
 
-## 🐛 Reporting a Vulnerability
+## Reporting a Vulnerability
 
-GitHub "Private vulnerability reporting" is enabled for The-Network-Crew/Proxmox-VE-for-WHMCS repository.
+Report vulnerabilities through Bisup's internal engineering/security process for this white-label fork.
 
-Or, use a publicly-available email address for The Network Crew Pty Ltd to submit it via email instead.
+Do not raise a public issue or share exploit details in client-facing channels where there is threat to users of the module.
 
-DO NOT raise a public issue where there is threat to users of the module. Raise it properly.
+Include:
 
-### No bounties offered
+- Affected module version.
+- Affected WHMCS and Proxmox versions.
+- Reproduction steps.
+- Impact summary.
+- Sanitized logs or screenshots.
 
-As a company, we do not believe in paying security bounties, rather in writing good code.
+## No Bounties
 
-We appreciate your input and work to address issues as quickly as possible, security first and foremost.
+This fork does not define a public bounty program.
 
-Updates can be provided as promptly as days apart, however this depends on severity/scope, and is always reasonable.
+## Attribution
 
-## ❤️ Thank you for responsibly disclosing
-
-We & the entire FOSS community thank you for reviewing this file & being aware of how to improve the project.
+This fork is based on the GPLv3 open-source `The-Network-Crew/Proxmox-VE-for-WHMCS` module. Keep license and contributor notices intact when modifying or redistributing.

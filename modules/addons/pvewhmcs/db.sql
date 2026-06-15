@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS `mod_pvewhmcs_vms` (
   `id` int(10) unsigned NOT NULL,
   `vmid` int(10) unsigned DEFAULT NULL,
   `node_id` int(10) unsigned DEFAULT NULL,
+  `node_name` varchar(255) DEFAULT NULL,
   `user_id` int(10) unsigned NOT NULL,
   `vtype` varchar(255) NOT NULL,
   `ipaddress` varchar(255) NOT NULL,

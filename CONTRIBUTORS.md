@@ -1,4 +1,8 @@
-# Contributors to Proxmox VE for WHMCS
+# Contributors to Bisup Proxmox VE for WHMCS
+
+Bisup maintains this white-label fork.
+
+Original upstream contributors:
 
 This document seeks to say "cheers", "many thanks" & "love your work" to the people and companies who have helped to make this project what it is today.
 

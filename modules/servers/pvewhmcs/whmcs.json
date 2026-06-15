@@ -5,20 +5,20 @@
   "license": "open-source",
   "category": "provisioning",
   "description": {
-    "name": "Proxmox VE for WHMCS",
-    "tagline": "Seamless integration of Proxmox VE (PVE) VMs & CTs with WHMCS.",
+    "name": "Bisup Proxmox VE for WHMCS",
+    "tagline": "Bisup-branded provisioning and management for Proxmox VE VMs and CTs in WHMCS.",
     "long": ""
   },
     "logo": {
         "filename": "img/logo.png"
   },
   "support": {
-    "docs_url": "https://github.com/The-Network-Crew/Proxmox-VE-for-WHMCS"
+    "docs_url": "https://bisup.com"
   },
   "authors": [
     {
-      "name": "The Network Crew Pty Ltd",
-      "homepage": "https:\/\/tnc.works\/"
+      "name": "Bisup",
+      "homepage": "https:\/\/bisup.com\/"
     }
   ]
 }
