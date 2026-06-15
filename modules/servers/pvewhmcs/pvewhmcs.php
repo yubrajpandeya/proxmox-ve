@@ -195,8 +195,9 @@ function pvewhmcs_CreateAccount($params) {
 			unset($nodes);
 			// Find the next available VMID by checking if the VMID exists either for QEMU or LXC
 			$vmid = pvewhmcs_find_next_available_vmid($proxmox, $template_node, $vmid);
+			$vm_hostname = pvewhmcs_get_service_hostname($params, $vmid);
 			$vm_settings['newid'] = $vmid;
-			$vm_settings['name'] = "vps" . $params["serviceid"] . "-cus" . $params['clientsdetails']['userid'];
+			$vm_settings['name'] = $vm_hostname;
 			$vm_settings['full'] = true;
 			$vm_settings['target'] = $template_node;
 			// QEMU TEMPLATE - Conduct the VM CLONE from Template to Machine
@@ -281,6 +282,7 @@ function pvewhmcs_CreateAccount($params) {
 				// Cloud-Init IP Configuration for Cloned VMs
 				$cloned_tweaks['nameserver'] = '208.67.222.222 64.6.64.6';
 				$cloned_tweaks['ipconfig0'] = 'ip=' . $ip->ipaddress . '/' . mask2cidr($ip->mask) . ',gw=' . $ip->gateway;
+				$cloned_tweaks['name'] = $vm_hostname;
 				if (!empty($plan->ipv6) && $plan->ipv6 != '0') {
 					switch ($plan->ipv6) {
 						case 'auto':
@@ -308,6 +310,11 @@ function pvewhmcs_CreateAccount($params) {
 
 				if (!empty($params['customfields']['Password'])) {
 					$cloned_tweaks['cipassword'] = $params['customfields']['Password'];
+				}
+
+				$cloned_config = $proxmox->get('/nodes/' . $template_node . '/qemu/' . $vm_settings['newid'] . '/config');
+				if (!pvewhmcs_qemu_has_cloudinit_drive($cloned_config)) {
+					$cloned_tweaks['ide2'] = $plan->storage . ':cloudinit';
 				}
 
 				// Apply VM configuration on the node where the VM was cloned
@@ -1639,6 +1646,62 @@ function pvewhmcs_remember_guest_node($serviceId, $guest, $node)
 	} catch (Throwable $e) {
 		// Older installs may not have node_name until the addon upgrade has run.
 	}
+}
+
+function pvewhmcs_get_service_hostname(array $params, $fallbackVmid)
+{
+	$candidates = array(
+		isset($params['domain']) ? $params['domain'] : '',
+		isset($params['hostname']) ? $params['hostname'] : '',
+		isset($params['customfields']['Hostname']) ? $params['customfields']['Hostname'] : '',
+		isset($params['customfields']['hostname']) ? $params['customfields']['hostname'] : '',
+	);
+
+	foreach ($candidates as $candidate) {
+		$name = pvewhmcs_sanitise_proxmox_name($candidate);
+		if ($name !== '') {
+			return $name;
+		}
+	}
+
+	return 'vps-' . (int) $fallbackVmid;
+}
+
+function pvewhmcs_sanitise_proxmox_name($name)
+{
+	$name = strtolower(trim((string) $name));
+	$name = preg_replace('/[^a-z0-9.-]+/', '-', $name);
+	$name = preg_replace('/-+/', '-', $name);
+	$name = trim($name, '.-');
+
+	if ($name === '') {
+		return '';
+	}
+
+	if (strlen($name) > 63) {
+		$name = trim(substr($name, 0, 63), '.-');
+	}
+
+	return $name;
+}
+
+function pvewhmcs_qemu_has_cloudinit_drive($config)
+{
+	if (!is_array($config)) {
+		return false;
+	}
+
+	foreach ($config as $key => $value) {
+		if (!preg_match('/^(ide|sata|scsi|virtio)\d+$/', (string) $key)) {
+			continue;
+		}
+
+		if (stripos((string) $value, 'cloudinit') !== false) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 // CLIENT AREA: REFRESH TO CHECK STATUS ON-CLICK
