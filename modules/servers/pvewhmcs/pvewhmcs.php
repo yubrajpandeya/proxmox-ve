@@ -127,7 +127,7 @@ function pvewhmcs_CreateAccount($params) {
 	$tplNodeQemu = pvewhmcs_get_effective_customfield($params, 'TPL_Node_QEMU');
 	$tplNodeLxc = pvewhmcs_get_effective_customfield($params, 'TPL_Node_LXC');
 	$lxcTemplate = pvewhmcs_get_effective_customfield($params, 'Template');
-	$cloudPassword = pvewhmcs_get_effective_customfield($params, 'Password');
+	$cloudPassword = pvewhmcs_get_service_customfield($params, 'Password');
 	$isoImage = pvewhmcs_get_effective_customfield($params, 'ISO');
 
 	// PVE Host - Connection Info
@@ -1732,6 +1732,45 @@ function pvewhmcs_get_effective_customfield(array $params, $fieldName)
 	}
 
 	return '';
+}
+
+function pvewhmcs_get_service_customfield(array $params, $fieldName)
+{
+	if (isset($params['customfields'][$fieldName]) && trim((string) $params['customfields'][$fieldName]) !== '') {
+		return trim((string) $params['customfields'][$fieldName]);
+	}
+
+	$productId = 0;
+	if (!empty($params['pid'])) {
+		$productId = (int) $params['pid'];
+	} elseif (!empty($params['packageid'])) {
+		$productId = (int) $params['packageid'];
+	}
+
+	if ($productId <= 0 || empty($params['serviceid'])) {
+		return '';
+	}
+
+	try {
+		$field = Capsule::table('tblcustomfields')
+			->where('type', '=', 'product')
+			->where('relid', '=', $productId)
+			->where('fieldname', '=', $fieldName)
+			->first();
+
+		if (!$field) {
+			return '';
+		}
+
+		$value = Capsule::table('tblcustomfieldsvalues')
+			->where('fieldid', '=', $field->id)
+			->where('relid', '=', (int) $params['serviceid'])
+			->value('value');
+
+		return trim((string) $value);
+	} catch (Throwable $e) {
+		return '';
+	}
 }
 
 function pvewhmcs_sanitise_proxmox_name($name)
