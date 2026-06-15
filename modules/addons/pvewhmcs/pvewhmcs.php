@@ -601,12 +601,19 @@ function pvewhmcs_output($vars) {
 	<a class="btn btn-default" href="'. pvewhmcs_BASEURL .'&amp;tab=vmplans&amp;action=import_guest">
 	<i class="fa fa-upload"></i>&nbsp; Import: Guest
 	</a>
+	<a class="btn btn-default" href="'. pvewhmcs_BASEURL .'&amp;tab=vmplans&amp;action=link_guest">
+	<i class="fa fa-link"></i>&nbsp; Link Existing Service
+	</a>
 	</div>
 	';
 
 	// Handle actions based on the 'action' GET parameter
 	if ($_GET['action']=='import_guest') {
 		import_guest() ;
+	}
+
+	if ($_GET['action']=='link_guest') {
+		link_existing_guest() ;
 	}
 	
 	if ($_GET['action']=='add_qemu_plan') {
@@ -1068,6 +1075,173 @@ function import_guest() {
 	echo '</table>';
 	echo '<div class="btn-container"><input type="submit" class="btn btn-primary" value="Import Guest" name="import_existing_guest" id="import_existing_guest"></div>';
 	echo '</form>';
+}
+
+// Link Guest sub-page handler
+// This associates an already-created WHMCS service with an existing Proxmox VM/CT.
+// It preserves tblhosting.orderid and does not create a new WHMCS service.
+function link_existing_guest() {
+	$resultMsg = '';
+
+	if (!empty($_POST['link_existing_service'])) {
+		$serviceID = intval($_POST['link_serviceid']);
+		$vmid = intval($_POST['link_vmid']);
+		$vtype = ($_POST['link_vtype'] === 'lxc') ? 'lxc' : 'qemu';
+		$nodeName = trim($_POST['link_node_name']);
+		$ipaddress = trim($_POST['link_ipv4']);
+		$subnetmask = trim($_POST['link_subnet']);
+		$gateway = trim($_POST['link_gateway']);
+		$replaceExisting = !empty($_POST['replace_existing_link']);
+		$updateServiceInfo = !empty($_POST['update_service_info']);
+		$hostname = trim($_POST['link_hostname']);
+
+		if ($serviceID <= 0 || $vmid <= 0 || $nodeName === '') {
+			$resultMsg = '<div class="errorbox">Service ID, Proxmox VMID, and Proxmox node are required.</div>';
+		} else {
+			$service = Capsule::table('tblhosting')
+				->join('tblproducts', 'tblproducts.id', '=', 'tblhosting.packageid')
+				->leftJoin('tblclients', 'tblclients.id', '=', 'tblhosting.userid')
+				->where('tblhosting.id', '=', $serviceID)
+				->select(
+					'tblhosting.*',
+					'tblproducts.name as product_name',
+					'tblproducts.servertype as product_module',
+					'tblclients.firstname',
+					'tblclients.lastname',
+					'tblclients.companyname'
+				)
+				->first();
+
+			if (!$service) {
+				$resultMsg = '<div class="errorbox">No WHMCS service found with ID ' . $serviceID . '.</div>';
+			} elseif (!in_array($service->domainstatus, array('Pending', 'Active', 'Suspended', 'Completed'))) {
+				$resultMsg = '<div class="errorbox">Service #' . $serviceID . ' is ' . htmlspecialchars($service->domainstatus) . '. Link only Pending, Active, Suspended, or Completed services.</div>';
+			} elseif ($service->product_module !== 'pvewhmcs') {
+				$resultMsg = '<div class="errorbox">Service #' . $serviceID . ' belongs to product "' . htmlspecialchars($service->product_name) . '", but that product is not using the Bisup Proxmox module.</div>';
+			} else {
+				$vmidOwner = Capsule::table('mod_pvewhmcs_vms')
+					->where('vmid', '=', $vmid)
+					->where('vtype', '=', $vtype)
+					->where('id', '!=', $serviceID)
+					->first();
+				$currentLink = Capsule::table('mod_pvewhmcs_vms')->where('id', '=', $serviceID)->first();
+
+				if ($vmidOwner) {
+					$resultMsg = '<div class="errorbox">Proxmox VMID ' . $vmid . ' (' . htmlspecialchars($vtype) . ') is already linked to WHMCS Service #' . intval($vmidOwner->id) . '. Remove that link first if this is intentional.</div>';
+				} elseif ($currentLink && !$replaceExisting) {
+					$resultMsg = '<div class="errorbox">Service #' . $serviceID . ' is already linked to VMID ' . intval($currentLink->vmid) . '. Tick "Replace existing link" to update it.</div>';
+				} else {
+					try {
+						Capsule::connection()->transaction(function () use ($serviceID, $service, $vmid, $vtype, $nodeName, $ipaddress, $subnetmask, $gateway, $currentLink, $updateServiceInfo, $hostname) {
+							$linkData = array(
+								'vmid' => $vmid,
+								'user_id' => $service->userid,
+								'vtype' => $vtype,
+								'ipaddress' => $ipaddress,
+								'subnetmask' => $subnetmask,
+								'gateway' => $gateway,
+								'node_name' => $nodeName,
+							);
+
+							if ($currentLink) {
+								Capsule::table('mod_pvewhmcs_vms')
+									->where('id', '=', $serviceID)
+									->update($linkData);
+							} else {
+								$linkData['id'] = $serviceID;
+								$linkData['created'] = date('Y-m-d H:i:s');
+								Capsule::table('mod_pvewhmcs_vms')->insert($linkData);
+							}
+
+							if ($updateServiceInfo) {
+								$serviceUpdate = array('lastupdate' => date('Y-m-d H:i:s'));
+								if ($hostname !== '') {
+									$serviceUpdate['domain'] = $hostname;
+								}
+								if ($ipaddress !== '') {
+									$serviceUpdate['dedicatedip'] = $ipaddress;
+								}
+								Capsule::table('tblhosting')
+									->where('id', '=', $serviceID)
+									->update($serviceUpdate);
+							}
+						});
+
+						$clientLabel = trim(($service->companyname ? $service->companyname . ' - ' : '') . $service->firstname . ' ' . $service->lastname);
+						$resultMsg = '<div class="successbox">Linked existing Service #' . $serviceID . ' to Proxmox VMID ' . $vmid . ' (' . htmlspecialchars($vtype) . ') on node ' . htmlspecialchars($nodeName) . '. Existing Order ID #' . intval($service->orderid) . ' was preserved for ' . htmlspecialchars($clientLabel) . '.</div>';
+					} catch (Exception $e) {
+						$resultMsg = '<div class="errorbox">Could not link existing service: ' . htmlspecialchars($e->getMessage()) . '</div>';
+					}
+				}
+			}
+		}
+	}
+
+	if (!empty($resultMsg)) {
+		echo $resultMsg;
+	}
+
+	$recentServices = Capsule::table('tblhosting')
+		->join('tblproducts', 'tblproducts.id', '=', 'tblhosting.packageid')
+		->leftJoin('tblclients', 'tblclients.id', '=', 'tblhosting.userid')
+		->where('tblproducts.servertype', '=', 'pvewhmcs')
+		->whereIn('tblhosting.domainstatus', array('Pending', 'Active', 'Suspended', 'Completed'))
+		->orderBy('tblhosting.id', 'desc')
+		->limit(250)
+		->select(
+			'tblhosting.id',
+			'tblhosting.userid',
+			'tblhosting.domain',
+			'tblhosting.domainstatus',
+			'tblhosting.orderid',
+			'tblproducts.name as product_name',
+			'tblclients.firstname',
+			'tblclients.lastname',
+			'tblclients.companyname'
+		)
+		->get();
+
+	echo '<div class="infobox"><strong>Link Existing Service</strong><br>This links an existing WHMCS product/service to an existing Proxmox VM or CT. It does not create a new service and it keeps the original WHMCS Order ID unchanged.</div>';
+	echo '<form method="post">';
+	echo '<table class="form" border="0" cellpadding="3" cellspacing="1" width="100%">';
+	echo '<tr><td class="fieldlabel">Find Recent Service</td><td class="fieldarea"><select id="link_service_picker" class="form-control select-inline"><option value="">Choose a recent Proxmox service...</option>';
+	foreach ($recentServices as $service) {
+		$clientLabel = trim(($service->companyname ? $service->companyname . ' - ' : '') . $service->firstname . ' ' . $service->lastname);
+		$label = '#' . $service->id . ' | Client #' . $service->userid . ' | ' . $clientLabel . ' | ' . $service->product_name . ' | ' . $service->domainstatus . ' | Order #' . $service->orderid;
+		if (!empty($service->domain)) {
+			$label .= ' | ' . $service->domain;
+		}
+		echo '<option value="' . intval($service->id) . '">' . htmlspecialchars($label) . '</option>';
+	}
+	echo '</select> <span class="help-block">Optional helper. You can also type the Service ID manually below.</span></td></tr>';
+	echo '<tr><td class="fieldlabel">Existing WHMCS Service ID</td><td class="fieldarea"><input type="number" min="1" name="link_serviceid" id="link_serviceid" required> <span class="help-block">Use tblhosting.id, not order ID.</span></td></tr>';
+	echo '<tr><td class="fieldlabel">PVE VMID</td><td class="fieldarea"><input type="number" min="1" name="link_vmid" required></td></tr>';
+	echo '<tr><td class="fieldlabel">Proxmox Node</td><td class="fieldarea"><input type="text" name="link_node_name" placeholder="epyc" required></td></tr>';
+	echo '<tr><td class="fieldlabel">VM / CT</td><td class="fieldarea"><select name="link_vtype" required><option value="qemu">(VM) QEMU</option><option value="lxc">(CT) LXC</option></select></td></tr>';
+	echo '<tr><td class="fieldlabel">Hostname</td><td class="fieldarea"><input type="text" name="link_hostname" placeholder="Optional"></td></tr>';
+	echo '<tr><td class="fieldlabel">IPv4</td><td class="fieldarea"><input type="text" name="link_ipv4" placeholder="Optional"></td></tr>';
+	echo '<tr><td class="fieldlabel">Subnet</td><td class="fieldarea"><input type="text" name="link_subnet" placeholder="Optional"></td></tr>';
+	echo '<tr><td class="fieldlabel">Gateway</td><td class="fieldarea"><input type="text" name="link_gateway" placeholder="Optional"></td></tr>';
+	echo '<tr><td class="fieldlabel">Options</td><td class="fieldarea">';
+	echo '<label><input type="checkbox" name="replace_existing_link" value="1"> Replace existing link for this service</label><br>';
+	echo '<label><input type="checkbox" name="update_service_info" value="1"> Also update service hostname/IP fields</label>';
+	echo '</td></tr>';
+	echo '</table>';
+	echo '<div class="btn-container"><input type="submit" class="btn btn-primary" value="Link Existing Service" name="link_existing_service" onclick="return confirm(\'Link this WHMCS service to the selected Proxmox guest? The WHMCS order ID will not be changed.\')"></div>';
+	echo '</form>';
+	echo '<script>
+document.addEventListener("DOMContentLoaded", function () {
+	var picker = document.getElementById("link_service_picker");
+	var input = document.getElementById("link_serviceid");
+	if (picker && input) {
+		picker.addEventListener("change", function () {
+			if (picker.value) {
+				input.value = picker.value;
+			}
+		});
+	}
+});
+</script>';
 }
 
 // MODULE CONFIG: Commit changes to the database

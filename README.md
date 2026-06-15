@@ -9,7 +9,7 @@ This repository is a white-label fork of the open-source `The-Network-Crew/Proxm
 - Provisions QEMU VMs and LXC containers from WHMCS products.
 - Lets WHMCS clients start, stop, reboot, shut down, and open console access.
 - Maps WHMCS products to Proxmox plans and IPv4 pools.
-- Imports existing Proxmox guests into WHMCS.
+- Imports existing Proxmox guests into WHMCS or links them to already-ordered WHMCS services.
 - Shows VM/CT status and resource graphs where Proxmox RRD data is available.
 - Provides WHMCS admin tabs for nodes, guests, plans, IP pools, logs, support, and module configuration.
 
@@ -88,6 +88,8 @@ Common checks:
 ## White-label Notes
 
 See [docs/BISUP-WHITELABEL.md](docs/BISUP-WHITELABEL.md) for the white-label scope, modified surfaces, and maintenance rules.
+
+For already-created WHMCS services, use the link flow in [docs/LINK-EXISTING-SERVICE.md](docs/LINK-EXISTING-SERVICE.md). This preserves the original WHMCS order ID.
 
 ## License And Attribution
 
