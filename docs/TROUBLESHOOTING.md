@@ -43,6 +43,22 @@ Check:
 - Storage names in the plan match Proxmox exactly.
 - Bridge, VLAN, CPU, memory, and disk values are accepted by the target node.
 
+### Unable To Find A Free VMID
+
+If Proxmox has free VMIDs but WHMCS reports:
+
+```text
+Unable to find a free VMID starting at 300 after 1000 attempts
+```
+
+deploy a build that includes the cluster-scan VMID allocator. Older builds tried to probe `/cluster/nextid` with a GET parameter through a wrapper that did not send GET query parameters, so it could loop without ever checking IDs such as `301` or `302`.
+
+After deploying the fixed `modules/servers/pvewhmcs/pvewhmcs.php`, clear template cache and retry module create:
+
+```bash
+rm -rf /home/mybisup/public_html/templates_c/*
+```
+
 ## Console Fails
 
 Collect:

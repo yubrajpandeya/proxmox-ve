@@ -588,57 +588,50 @@ function pvewhmcs_CreateAccount($params) {
  */
 function pvewhmcs_find_next_available_vmid($proxmox, $node, $start_vmid) {
 	$start_vmid = (int) $start_vmid;
+	if ($start_vmid < 100) {
+		$start_vmid = 100;
+	}
 
-	// First, try to get the cluster's next available VMID directly
+	// First, try Proxmox's native nextid endpoint. When it returns an ID above
+	// our configured floor, it is the fastest and most authoritative answer.
 	try {
 		$resp = $proxmox->get('/cluster/nextid');
 		$data = (is_array($resp) && array_key_exists('data', $resp)) ? $resp['data'] : $resp;
 		$cluster_next = (int) $data;
 
-		// If cluster's next VMID is >= our start, use it directly
 		if ($cluster_next >= $start_vmid) {
 			return $cluster_next;
 		}
 	} catch (\Throwable $e) {
-		// If /cluster/nextid fails entirely, fall through to the probe method
+		// Fall through to a full cluster scan.
 	}
 
-	// If cluster's next VMID is below our start_vmid, or the call failed,
-	// we need to probe starting from start_vmid
-	$max_attempts = 1000;
-	$vmid = $start_vmid;
-
-	for ($i = 0; $i < $max_attempts; $i++, $vmid++) {
-		try {
-			// Ask Proxmox if this specific VMID is available
-			// If available, it returns the same VMID; if not, it throws an error
-			$resp = $proxmox->get('/cluster/nextid', ['vmid' => $vmid]);
-			$data = (is_array($resp) && array_key_exists('data', $resp)) ? $resp['data'] : $resp;
-
-			// Proxmox confirmed this VMID is available
-			if ((int) $data === $vmid) {
-				return $vmid;
+	// The bundled API wrapper does not support GET query parameters, so probing
+	// /cluster/nextid?vmid=N through get('/cluster/nextid', ['vmid' => N]) never
+	// actually sent the VMID. Scan the cluster once instead and pick the first
+	// unused ID above the configured floor.
+	$occupied = array();
+	try {
+		$resources = $proxmox->get('/cluster/resources?type=vm');
+		if (is_array($resources)) {
+			foreach ($resources as $resource) {
+				if (isset($resource['vmid'])) {
+					$occupied[(int) $resource['vmid']] = true;
+				}
 			}
+		}
+	} catch (\Throwable $e) {
+		throw new Exception('Unable to load Proxmox VMID list before allocation: ' . $e->getMessage());
+	}
 
-			// If API returns a different number, that's unexpected but try next
-			continue;
-
-		} catch (\Throwable $e) {
-			$msg = strtolower($e->getMessage());
-
-			// VMID is occupied - these are expected errors, try next VMID
-			if (strpos($msg, 'already exists') !== false ||
-				strpos($msg, 'parameter verification failed') !== false ||
-				strpos($msg, 'vm ') !== false) {
-				continue;
-			}
-
-			// Any other error is unexpected; surface it
-			throw $e;
+	$max_attempts = 10000;
+	for ($vmid = $start_vmid; $vmid < ($start_vmid + $max_attempts); $vmid++) {
+		if (empty($occupied[$vmid])) {
+			return $vmid;
 		}
 	}
 
-	throw new Exception("Unable to find a free VMID starting at {$start_vmid} after {$max_attempts} attempts");
+	throw new Exception("Unable to find a free VMID starting at {$start_vmid} after {$max_attempts} scanned IDs");
 }
 
 // PVE API FUNCTION, ADMIN: Test Connection with Proxmox node
