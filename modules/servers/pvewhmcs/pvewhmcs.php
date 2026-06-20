@@ -275,7 +275,10 @@ function pvewhmcs_CreateAccount($params) {
 				// Update WHMCS Service with Dedicated IP
 				Capsule::table('tblhosting')
 					->where('id', $params['serviceid'])
-					->update(['dedicatedip' => $ip->ipaddress]);
+					->update([
+						'username' => 'root',
+						'dedicatedip' => $ip->ipaddress,
+					]);
 
 				// ISSUE #32 relates - amend post-clone to ensure excludes-disk amendments are all done, too.
 				$cloned_tweaks['memory'] = $plan->memory;
@@ -287,6 +290,7 @@ function pvewhmcs_CreateAccount($params) {
 				$cloned_tweaks['onboot'] = $plan->onboot;
 				
 				// Cloud-Init IP Configuration for Cloned VMs
+				$cloned_tweaks['ciuser'] = 'root';
 				$cloned_tweaks['nameserver'] = '208.67.222.222 64.6.64.6';
 				$cloned_tweaks['ipconfig0'] = 'ip=' . $ip->ipaddress . '/' . mask2cidr($ip->mask) . ',gw=' . $ip->gateway;
 				$cloned_tweaks['name'] = $vm_hostname;
@@ -569,7 +573,10 @@ function pvewhmcs_CreateAccount($params) {
 					// Update WHMCS Service with Dedicated IP
 					Capsule::table('tblhosting')
 						->where('id', $params['serviceid'])
-						->update(['dedicatedip' => $ip->ipaddress]);
+						->update([
+							'username' => 'root',
+							'dedicatedip' => $ip->ipaddress,
+						]);
 					return true;
 				} else {
 					throw new Exception("Proxmox Error: Failed to initiate creation. Response: " . json_encode($response));
